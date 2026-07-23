@@ -339,34 +339,34 @@ else:
     monthly_average = total_sales / 3.0
     total_units = len(df_filtered)
     
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-label">Faturamento Total (3 Meses)</div>
-            <div class="kpi-value">{format_real(total_sales)}</div>
-            <div class="kpi-sub">Soma acumulada do faturamento</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col2:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-label">Média Mensal de Vendas</div>
-            <div class="kpi-value">{format_real(monthly_average)}</div>
-            <div class="kpi-sub">Faturamento total dividido por 3</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col3:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-label">Unidades Vendidas</div>
-            <div class="kpi-value">{total_units:,}</div>
-            <div class="kpi-sub">Total de veículos comercializados</div>
-        </div>
-        """, unsafe_allow_html=True)
+    # col1, col2, col3 = st.columns(3)
+    # 
+    # with col1:
+    #     st.markdown(f"""
+    #     <div class="kpi-card">
+    #         <div class="kpi-label">Faturamento Total (3 Meses)</div>
+    #         <div class="kpi-value">{format_real(total_sales)}</div>
+    #         <div class="kpi-sub">Soma acumulada do faturamento</div>
+    #     </div>
+    #     """, unsafe_allow_html=True)
+    #     
+    # with col2:
+    #     st.markdown(f"""
+    #     <div class="kpi-card">
+    #         <div class="kpi-label">Média Mensal de Vendas</div>
+    #         <div class="kpi-value">{format_real(monthly_average)}</div>
+    #         <div class="kpi-sub">Faturamento total dividido por 3</div>
+    #     </div>
+    #     """, unsafe_allow_html=True)
+    #     
+    # with col3:
+    #     st.markdown(f"""
+    #     <div class="kpi-card">
+    #         <div class="kpi-label">Unidades Vendidas</div>
+    #         <div class="kpi-value">{total_units:,}</div>
+    #         <div class="kpi-sub">Total de veículos comercializados</div>
+    #     </div>
+    #     """, unsafe_allow_html=True)
         
     # --- Seção do Modelo Selecionável ---
     st.markdown('<div class="section-title">Análise por Modelo de Veículo</div>', unsafe_allow_html=True)
@@ -526,56 +526,56 @@ else:
         else:
             st.warning(f"Não há dados de cores registrados para o modelo {selected_model}.")
             
-    # Gráficos e Insights Gerais de Faturamento Temporal
-    st.markdown('<div class="section-title">Tendência de Faturamento Mensal</div>', unsafe_allow_html=True)
-    
-    df_filtered['AnoMês'] = df_filtered[date_col].dt.to_period('M').astype(str)
-    df_monthly = df_filtered.groupby('AnoMês')[value_col].sum().reset_index()
-    df_monthly.columns = ['Mês', 'Faturamento']
-    df_monthly['Faturamento Formatado'] = df_monthly['Faturamento'].apply(format_real)
-    
-    col_chart, col_details = st.columns([3, 1])
-    
-    with col_chart:
-        fig_monthly = px.area(
-            df_monthly,
-            x='Mês',
-            y='Faturamento',
-            title="Evolução do Faturamento Mensal nos Últimos 3 Meses",
-            labels={'Faturamento': 'Faturamento (R$)', 'Mês': 'Mês de Faturamento'},
-            markers=True
-        )
-        
-        # Personalização estética premium do gráfico de área
-        fig_monthly.update_traces(
-            line_color='#3b82f6',
-            fillcolor='rgba(59, 130, 246, 0.1)',
-            line_width=3
-        )
-        
-        fig_monthly.update_layout(
-            paper_bgcolor='rgba(30, 41, 59, 0.4)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font_color='#cbd5e1',
-            title_font_family="'Outfit', sans-serif",
-            title_font_size=18,
-            margin=dict(l=20, r=20, t=50, b=20),
-            height=300
-        )
-        fig_monthly.update_xaxes(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
-        fig_monthly.update_yaxes(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
-        
-        st.plotly_chart(fig_monthly, use_container_width=True, config={'displayModeBar': False})
-        
-    with col_details:
-        st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
-        for idx, row in df_monthly.iterrows():
-            st.markdown(f"""
-            <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px 18px; margin-bottom: 10px;">
-                <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase;">MÊS {row['Mês']}</div>
-                <div style="font-size: 1.15rem; color: #ffffff; font-weight: 700; margin-top: 4px;">{row['Faturamento Formatado']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    # # Gráficos e Insights Gerais de Faturamento Temporal
+    # st.markdown('<div class="section-title">Tendência de Faturamento Mensal</div>', unsafe_allow_html=True)
+    # 
+    # df_filtered['AnoMês'] = df_filtered[date_col].dt.to_period('M').astype(str)
+    # df_monthly = df_filtered.groupby('AnoMês')[value_col].sum().reset_index()
+    # df_monthly.columns = ['Mês', 'Faturamento']
+    # df_monthly['Faturamento Formatado'] = df_monthly['Faturamento'].apply(format_real)
+    # 
+    # col_chart, col_details = st.columns([3, 1])
+    # 
+    # with col_chart:
+    #     fig_monthly = px.area(
+    #         df_monthly,
+    #         x='Mês',
+    #         y='Faturamento',
+    #         title="Evolução do Faturamento Mensal nos Últimos 3 Meses",
+    #         labels={'Faturamento': 'Faturamento (R$)', 'Mês': 'Mês de Faturamento'},
+    #         markers=True
+    #     )
+    #     
+    #     # Personalização estética premium do gráfico de área
+    #     fig_monthly.update_traces(
+    #         line_color='#3b82f6',
+    #         fillcolor='rgba(59, 130, 246, 0.1)',
+    #         line_width=3
+    #     )
+    #     
+    #     fig_monthly.update_layout(
+    #         paper_bgcolor='rgba(30, 41, 59, 0.4)',
+    #         plot_bgcolor='rgba(0,0,0,0)',
+    #         font_color='#cbd5e1',
+    #         title_font_family="'Outfit', sans-serif",
+    #         title_font_size=18,
+    #         margin=dict(l=20, r=20, t=50, b=20),
+    #         height=300
+    #     )
+    #     fig_monthly.update_xaxes(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
+    #     fig_monthly.update_yaxes(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
+    #     
+    #     st.plotly_chart(fig_monthly, use_container_width=True, config={'displayModeBar': False})
+    #     
+    # with col_details:
+    #     st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
+    #     for idx, row in df_monthly.iterrows():
+    #         st.markdown(f"""
+    #         <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px 18px; margin-bottom: 10px;">
+    #             <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase;">MÊS {row['Mês']}</div>
+    #             <div style="font-size: 1.15rem; color: #ffffff; font-weight: 700; margin-top: 4px;">{row['Faturamento Formatado']}</div>
+    #         </div>
+    #         """, unsafe_allow_html=True)
 
 # Rodapé
 st.markdown('<div class="footer">Desenvolvido com ❤️ e inteligência de dados • Antigravity 2026</div>', unsafe_allow_html=True)
