@@ -290,6 +290,14 @@ def format_real(val):
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+# Dicionário de tradução de meses
+meses_pt = {
+    "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
+    "05": "Maio", "06": "Junho", "07": "Julho", "08": "Agosto",
+    "09": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro"
+}
+
+
 # Carregando dados
 with st.spinner("Carregando base de dados..."):
     df_raw, file_name, error_msg = load_data()
@@ -328,16 +336,47 @@ else:
     start_date = max_date - pd.DateOffset(months=3)
     df_filtered = df[df[date_col] >= start_date].copy()
     
+    # Extração dinâmica de meses para o filtro
+    df_filtered['MesNum'] = df_filtered[date_col].dt.strftime('%m')
+    df_filtered['MesNome'] = df_filtered['MesNum'].map(meses_pt)
+    
+    df_filtered_sorted = df_filtered.sort_values(by=date_col)
+    available_months = [m for m in df_filtered_sorted['MesNome'].unique() if pd.notna(m)]
+    
+    # Seletor de mês na barra lateral
+    with st.sidebar:
+        st.markdown("### 🔍 Filtros de Vendas")
+        selected_month = st.selectbox(
+            "Selecione o Mês:",
+            options=["Todos os Meses"] + available_months,
+            index=0,
+            help="Selecione um mês específico para analisar ou 'Todos os Meses' para ver os últimos 3 meses consolidados."
+        )
+    
+    # Filtragem condicional dos dados
+    if selected_month == "Todos os Meses":
+        df_active = df_filtered.copy()
+        period_label = "últimos 3 meses"
+        period_label_kpi = "3 Meses"
+    else:
+        df_active = df_filtered[df_filtered['MesNome'] == selected_month].copy()
+        period_label = f"mês de {selected_month}"
+        period_label_kpi = selected_month
+        
     # --- Layout da Página ---
     
     # Cabeçalho
     st.markdown('<div class="main-header">Painel Analítico de Vendas</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="sub-header">Análise inteligente baseada no arquivo 📁 <b>{file_name}</b> no período de {start_date.strftime("%d/%m/%Y")} a {max_date.strftime("%d/%m/%Y")} (últimos 3 meses)</div>', unsafe_allow_html=True)
+    if selected_month == "Todos os Meses":
+        sub_header_text = f"Análise inteligente baseada no arquivo 📁 <b>{file_name}</b> no período de {start_date.strftime('%d/%m/%Y')} a {max_date.strftime('%d/%m/%Y')} ({period_label})"
+    else:
+        sub_header_text = f"Análise inteligente baseada no arquivo 📁 <b>{file_name}</b> filtrada para o {period_label}"
+    st.markdown(f'<div class="sub-header">{sub_header_text}</div>', unsafe_allow_html=True)
     
     # Métricas Gerais em Destaque
-    total_sales = df_filtered[value_col].sum()
-    monthly_average = total_sales / 3.0
-    total_units = len(df_filtered)
+    total_sales = df_active[value_col].sum()
+    monthly_average = total_sales / (3.0 if selected_month == "Todos os Meses" else 1.0)
+    total_units = len(df_active)
     
     # col1, col2, col3 = st.columns(3)
     # 
@@ -372,7 +411,7 @@ else:
     st.markdown('<div class="section-title">Análise por Modelo de Veículo</div>', unsafe_allow_html=True)
     
     # Dropdown de modelos
-    available_models = sorted(df_filtered[model_col].dropna().unique())
+    available_models = sorted(df_active[model_col].dropna().unique())
     
     col_select, col_space = st.columns([2, 2])
     with col_select:
@@ -385,7 +424,7 @@ else:
         
     if selected_model:
         # Filtrar dados para o modelo selecionado
-        df_model = df_filtered[df_filtered[model_col] == selected_model]
+        df_model = df_active[df_active[model_col] == selected_model]
         
         # Obter a cor mais vendida e a quantidade
         color_counts = df_model[color_col].value_counts()
@@ -403,10 +442,11 @@ else:
             col_m1, col_m2 = st.columns(2)
             
             with col_m1:
+                text_color_analysis = f"A cor mais vendida nos {period_label} é:" if selected_month == "Todos os Meses" else f"A cor mais vendida no {period_label} é:"
                 st.markdown(f"""
                 <div class="kpi-card" style="height: 100%;">
                     <div class="kpi-label">Análise de Cor - {selected_model}</div>
-                    <div style="font-size: 1.1rem; color: #94a3b8; margin-bottom: 15px;">A cor mais vendida nos últimos 3 meses é:</div>
+                    <div style="font-size: 1.1rem; color: #94a3b8; margin-bottom: 15px;">{text_color_analysis}</div>
                     <div style="background: {bg_grad}; color: {text_col}; border: 1px solid {border_col}; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
                         <div class="color-badge-container">
                             <div class="color-circle" style="background-color: {circ_col};"></div>
@@ -429,7 +469,7 @@ else:
                     x='Unidades',
                     y='Cor',
                     orientation='h',
-                    title=f"Top Cores Vendidas - {selected_model}",
+                    title=f"Top Cores Vendidas - {selected_model} ({period_label_kpi})",
                     labels={'Unidades': 'Unidades', 'Cor': 'Cor'},
                     color='Unidades',
                     color_continuous_scale='Blues'
@@ -483,29 +523,23 @@ else:
             col_v1, col_v2 = st.columns(2)
             
             with col_v1:
-                avg_model_monthly = total_model_sold / 3.0
+                avg_model_monthly = total_model_sold / (3.0 if selected_month == "Todos os Meses" else 1.0)
                 st.markdown(f"""
                 <div class="kpi-card">
-                    <div class="kpi-label">Volume Total de Vendas (3 Meses)</div>
+                    <div class="kpi-label">Volume Total de Vendas ({period_label_kpi})</div>
                     <div class="kpi-value">{total_model_sold} <span style="font-size: 1.2rem; color: #94a3b8; font-weight: 400;">unidades</span></div>
                     <div class="kpi-sub">Faturamento Total do Modelo: {format_real(df_model[value_col].sum())}</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Média Mensal de Vendas</div>
-                    <div class="kpi-value">{avg_model_monthly:.1f} <span style="font-size: 1.2rem; color: #94a3b8; font-weight: 400;">unidades/mês</span></div>
-                    <div class="kpi-sub">Calculado para o período de 3 meses</div>
+                    <div class="kpi-label">{"Média Mensal de Vendas" if selected_month == "Todos os Meses" else "Volume Mensal"}</div>
+                    <div class="kpi-value">{avg_model_monthly:.1f} <span style="font-size: 1.2rem; color: #94a3b8; font-weight: 400;">unidades{"/mês" if selected_month == "Todos os Meses" else ""}</span></div>
+                    <div class="kpi-sub">{"Calculado para o período de 3 meses" if selected_month == "Todos os Meses" else f"Referente a {selected_month}"}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
             with col_v2:
                 df_model_monthly = df_model.copy()
                 df_model_monthly['AnoMês'] = df_model_monthly[date_col].dt.to_period('M').astype(str)
-                
-                meses_pt = {
-                    "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
-                    "05": "Maio", "06": "Junho", "07": "Julho", "08": "Agosto",
-                    "09": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro"
-                }
                 
                 def format_month_year(row_val):
                     parts = row_val.split('-')
@@ -521,7 +555,7 @@ else:
                 
                 chart_data = monthly_counts.set_index('Mês/Ano')[['Unidades Vendidas']]
                 
-                st.markdown('<div class="kpi-label" style="margin-bottom: 15px;">Vendas Mensais (Unidades)</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="kpi-label" style="margin-bottom: 15px;">Vendas Mensais (Unidades) - {period_label_kpi}</div>', unsafe_allow_html=True)
                 st.bar_chart(chart_data, color="#3b82f6")
         else:
             st.warning(f"Não há dados de cores registrados para o modelo {selected_model}.")
