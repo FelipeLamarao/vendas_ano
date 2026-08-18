@@ -148,9 +148,11 @@ def load_data():
                 first_line = file_obj.readline()
             sep = ';' if ';' in first_line else ','
             df = pd.read_csv(target_file, sep=sep)
+            df['Modelo'] = df['Modelo'].str.replace(r'^(NV|NW|nv|nw)\s+', '', regex=True)
         else:
             # Excel
             df = pd.read_excel(target_file)
+            df['Modelo'] = df['Modelo'].str.replace(r'^(NV|NW|nv|nw)\s+', '', regex=True)
     except Exception as e:
         return None, None, f"Erro ao ler o arquivo {target_file}: {str(e)}"
         
