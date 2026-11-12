@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import re
 import os
 
@@ -338,6 +339,35 @@ else:
     start_date = max_date - pd.DateOffset(months=3)
     df_filtered = df[df[date_col] >= start_date].copy()
     
+    # Agrupamento por Família (na base dos últimos 3 meses, antes do filtro de mês único)
+    def map_familia(modelo):
+        if pd.isna(modelo):
+            return "OUTROS"
+        m = str(modelo).upper()
+        if "ONIX PLUS" in m:
+            return "ONIX PLUS"
+        elif "ONIX HB" in m or "ONIX HATCH" in m or "ONIX" in m:
+            return "ONIX HB"
+        elif "TRACKER" in m:
+            return "TRACKER"
+        elif "MONTANA" in m:
+            return "MONTANA"
+        elif "S10" in m:
+            return "S10"
+        elif "CAPTIVA" in m:
+            return "CAPTIVA"
+        elif "SPARK" in m:
+            return "SPARK"
+        elif "SONIC" in m:
+            return "SONIC"
+        elif "SPIN" in m:
+            return "SPIN"
+        elif "EQUINOX" in m:
+            return "EQUINOX"
+        return "OUTROS"
+
+    df_filtered['Familia_Agrupada'] = df_filtered[model_col].apply(map_familia)
+    
     # Extração dinâmica de meses para o filtro
     df_filtered['MesNum'] = df_filtered[date_col].dt.strftime('%m')
     df_filtered['MesNome'] = df_filtered['MesNum'].map(meses_pt)
@@ -612,6 +642,235 @@ else:
     #             <div style="font-size: 1.15rem; color: #ffffff; font-weight: 700; margin-top: 4px;">{row['Faturamento Formatado']}</div>
     #         </div>
     #         """, unsafe_allow_html=True)
+
+    # ==============================================================================
+    # NOVAS SEÇÕES ANALÍTICAS: COMPARATIVO POR FAMÍLIA E IMPACTO EM VOLUME
+    # ==============================================================================
+    familias_alvo = [
+        "ONIX HB", "ONIX PLUS", "TRACKER", "MONTANA", "S10",
+        "CAPTIVA", "SPARK", "SONIC", "SPIN", "EQUINOX"
+    ]
+
+    # Identificação dinâmica dos dois últimos meses disponíveis na base (Mês Final e Mês Anterior)
+    df_filtered['AnoMes_Comp'] = df_filtered[date_col].dt.to_period('M')
+    meses_disponiveis_period = sorted(df_filtered['AnoMes_Comp'].dropna().unique())
+
+    if len(meses_disponiveis_period) >= 2:
+        mes_final_period = meses_disponiveis_period[-1]
+        mes_anterior_period = meses_disponiveis_period[-2]
+
+        nome_mes_final = f"{meses_pt.get(f'{mes_final_period.month:02d}', str(mes_final_period.month))}/{mes_final_period.year}"
+        nome_mes_anterior = f"{meses_pt.get(f'{mes_anterior_period.month:02d}', str(mes_anterior_period.month))}/{mes_anterior_period.year}"
+
+        df_mes_final = df_filtered[df_filtered['AnoMes_Comp'] == mes_final_period]
+        df_mes_anterior = df_filtered[df_filtered['AnoMes_Comp'] == mes_anterior_period]
+
+        vendas_final = df_mes_final['Familia_Agrupada'].value_counts()
+        vendas_anterior = df_mes_anterior['Familia_Agrupada'].value_counts()
+
+        dados_comparativo = []
+        for fam in familias_alvo:
+            qtd_ant = int(vendas_anterior.get(fam, 0))
+            qtd_fin = int(vendas_final.get(fam, 0))
+            var_abs = qtd_fin - qtd_ant
+            if qtd_ant > 0:
+                var_pct = ((qtd_fin - qtd_ant) / qtd_ant) * 100.0
+            else:
+                var_pct = 100.0 if qtd_fin > 0 else 0.0
+
+            status_tendencia = "Em Alta" if var_abs > 0 else ("Em Queda" if var_abs < 0 else "Estável")
+            dados_comparativo.append({
+                "Família": fam,
+                "Mês Anterior": qtd_ant,
+                "Mês Final": qtd_fin,
+                "Saldo (Unid.)": var_abs,
+                "Variação (%)": var_pct,
+                "Status": status_tendencia
+            })
+
+        df_comp_familias = pd.DataFrame(dados_comparativo)
+
+        # --- DASH 1: Comparativo de Vendas por Família (Mês Final x Mês Anterior) ---
+        st.markdown(
+            f'<div class="section-title">Comparativo de Vendas por Família: {nome_mes_final} (Mês Final) vs {nome_mes_anterior} (Mês Anterior)</div>',
+            unsafe_allow_html=True
+        )
+
+        # Cards de métricas (st.metric) com indicadores de delta para as 10 famílias
+        st.markdown("##### 📌 Indicadores de Desempenho por Família (Mês Final vs Mês Anterior)")
+        cols_row1 = st.columns(5)
+        for i in range(5):
+            row_fam = df_comp_familias.iloc[i]
+            with cols_row1[i]:
+                delta_str = f"{row_fam['Saldo (Unid.)']:+d} unid. ({row_fam['Variação (%)']:+.1f}%)"
+                st.metric(
+                    label=f"🚗 {row_fam['Família']}",
+                    value=f"{row_fam['Mês Final']} un.",
+                    delta=delta_str
+                )
+
+        cols_row2 = st.columns(5)
+        for i in range(5, 10):
+            row_fam = df_comp_familias.iloc[i]
+            with cols_row2[i - 5]:
+                delta_str = f"{row_fam['Saldo (Unid.)']:+d} unid. ({row_fam['Variação (%)']:+.1f}%)"
+                st.metric(
+                    label=f"🚗 {row_fam['Família']}",
+                    value=f"{row_fam['Mês Final']} un.",
+                    delta=delta_str
+                )
+
+        # Gráfico de Barras Agrupadas no Plotly (Mês Anterior x Mês Final)
+        fig_comp = go.Figure()
+        fig_comp.add_trace(go.Bar(
+            name=f"Mês Anterior ({nome_mes_anterior})",
+            x=df_comp_familias["Família"],
+            y=df_comp_familias["Mês Anterior"],
+            marker_color="#64748b",
+            text=df_comp_familias["Mês Anterior"],
+            textposition="outside"
+        ))
+        fig_comp.add_trace(go.Bar(
+            name=f"Mês Final ({nome_mes_final})",
+            x=df_comp_familias["Família"],
+            y=df_comp_familias["Mês Final"],
+            marker_color="#3b82f6",
+            text=df_comp_familias["Mês Final"],
+            textposition="outside"
+        ))
+
+        fig_comp.update_layout(
+            barmode="group",
+            title=f"Volume de Vendas por Família: {nome_mes_anterior} vs {nome_mes_final}",
+            paper_bgcolor="rgba(30, 41, 59, 0.4)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#cbd5e1",
+            title_font_family="'Outfit', sans-serif",
+            title_font_size=18,
+            margin=dict(l=20, r=20, t=55, b=20),
+            height=400,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        fig_comp.update_xaxes(showgrid=False, title_text="Família de Veículos")
+        fig_comp.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)", title_text="Unidades Vendidas")
+
+        st.plotly_chart(fig_comp, use_container_width=True, config={"displayModeBar": False})
+
+        # --- DASH 2: Modelos com Maior Impacto em Volume (Positivos e Negativos) ---
+        st.markdown(
+            f'<div class="section-title">Modelos/Famílias com Maior Impacto em Volume ({nome_mes_final} vs {nome_mes_anterior})</div>',
+            unsafe_allow_html=True
+        )
+
+        # Gráfico de barras horizontais divergentes consolidado (Visão Geral do Saldo)
+        df_divergente = df_comp_familias.sort_values(by="Saldo (Unid.)", ascending=True).copy()
+        df_divergente["Cor_Barra"] = df_divergente["Saldo (Unid.)"].apply(
+            lambda x: "#10b981" if x > 0 else ("#ef4444" if x < 0 else "#64748b")
+        )
+        df_divergente["Texto_Saldo"] = df_divergente.apply(
+            lambda r: f"{r['Saldo (Unid.)']:+d} un. ({r['Variação (%)']:+.1f}%)", axis=1
+        )
+
+        fig_div = go.Figure(go.Bar(
+            x=df_divergente["Saldo (Unid.)"],
+            y=df_divergente["Família"],
+            orientation="h",
+            marker_color=df_divergente["Cor_Barra"],
+            text=df_divergente["Texto_Saldo"],
+            textposition="outside"
+        ))
+        fig_div.update_layout(
+            title=f"Balanço Divergente de Volume por Família (Saldo de Unidades: {nome_mes_final} - {nome_mes_anterior})",
+            paper_bgcolor="rgba(30, 41, 59, 0.4)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#cbd5e1",
+            title_font_family="'Outfit', sans-serif",
+            title_font_size=17,
+            margin=dict(l=20, r=60, t=50, b=20),
+            height=380
+        )
+        fig_div.add_vline(x=0, line_width=2, line_dash="dash", line_color="rgba(255,255,255,0.35)")
+        fig_div.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)", title_text="Variação Absoluta (Unidades)")
+        fig_div.update_yaxes(showgrid=False)
+
+        st.plotly_chart(fig_div, use_container_width=True, config={"displayModeBar": False})
+
+        # Divisão em duas colunas: Impactos Positivos vs Impactos Negativos
+        col_imp_pos, col_imp_neg = st.columns(2)
+
+        df_positivos = df_comp_familias[df_comp_familias["Saldo (Unid.)"] > 0].sort_values(
+            by=["Saldo (Unid.)", "Variação (%)"], ascending=[False, False]
+        )
+        df_negativos = df_comp_familias[df_comp_familias["Saldo (Unid.)"] < 0].sort_values(
+            by=["Saldo (Unid.)", "Variação (%)"], ascending=[True, True]
+        )
+
+        with col_imp_pos:
+            st.markdown("#### 📈 Impactos Positivos (Puxaram as vendas para cima)")
+            if not df_positivos.empty:
+                df_pos_plot = df_positivos.sort_values(by="Saldo (Unid.)", ascending=True)
+                fig_pos = go.Figure(go.Bar(
+                    x=df_pos_plot["Saldo (Unid.)"],
+                    y=df_pos_plot["Família"],
+                    orientation="h",
+                    marker_color="#10b981",
+                    text=df_pos_plot.apply(lambda r: f"+{r['Saldo (Unid.)']} un. (+{r['Variação (%)']:.1f}%)", axis=1),
+                    textposition="auto"
+                ))
+                fig_pos.update_layout(
+                    title="Crescimento Real em Volume (Unidades)",
+                    paper_bgcolor="rgba(30, 41, 59, 0.4)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#cbd5e1",
+                    title_font_family="'Outfit', sans-serif",
+                    title_font_size=15,
+                    margin=dict(l=10, r=20, t=40, b=10),
+                    height=280
+                )
+                fig_pos.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)", title_text="Saldo Positivo (+ Unid.)")
+                fig_pos.update_yaxes(showgrid=False)
+                st.plotly_chart(fig_pos, use_container_width=True, config={"displayModeBar": False})
+
+                df_pos_tab = df_positivos[["Família", "Mês Anterior", "Mês Final", "Saldo (Unid.)", "Variação (%)"]].copy()
+                df_pos_tab["Saldo (Unid.)"] = df_pos_tab["Saldo (Unid.)"].apply(lambda x: f"+{x}")
+                df_pos_tab["Variação (%)"] = df_pos_tab["Variação (%)"].apply(lambda x: f"+{x:.1f}%")
+                st.dataframe(df_pos_tab, hide_index=True, use_container_width=True)
+            else:
+                st.info("Nenhuma família apresentou crescimento de volume no Mês Final em relação ao Mês Anterior.")
+
+        with col_imp_neg:
+            st.markdown("#### 📉 Impactos Negativos (Puxaram as vendas para baixo)")
+            if not df_negativos.empty:
+                df_neg_plot = df_negativos.sort_values(by="Saldo (Unid.)", ascending=False)
+                fig_neg = go.Figure(go.Bar(
+                    x=df_neg_plot["Saldo (Unid.)"],
+                    y=df_neg_plot["Família"],
+                    orientation="h",
+                    marker_color="#ef4444",
+                    text=df_neg_plot.apply(lambda r: f"{r['Saldo (Unid.)']} un. ({r['Variação (%)']:.1f}%)", axis=1),
+                    textposition="auto"
+                ))
+                fig_neg.update_layout(
+                    title="Retração Real em Volume (Unidades)",
+                    paper_bgcolor="rgba(30, 41, 59, 0.4)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#cbd5e1",
+                    title_font_family="'Outfit', sans-serif",
+                    title_font_size=15,
+                    margin=dict(l=10, r=20, t=40, b=10),
+                    height=280
+                )
+                fig_neg.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)", title_text="Saldo Negativo (- Unid.)")
+                fig_neg.update_yaxes(showgrid=False)
+                st.plotly_chart(fig_neg, use_container_width=True, config={"displayModeBar": False})
+
+                df_neg_tab = df_negativos[["Família", "Mês Anterior", "Mês Final", "Saldo (Unid.)", "Variação (%)"]].copy()
+                df_neg_tab["Variação (%)"] = df_neg_tab["Variação (%)"].apply(lambda x: f"{x:.1f}%")
+                st.dataframe(df_neg_tab, hide_index=True, use_container_width=True)
+            else:
+                st.info("Nenhuma família apresentou retração de volume no Mês Final em relação ao Mês Anterior.")
+    else:
+        st.warning("Não há meses suficientes disponíveis nos últimos 3 meses para realizar o comparativo entre Mês Final e Mês Anterior.")
 
 # Rodapé
 st.markdown('<div class="footer">Desenvolvido com ❤️ e inteligência de dados • Antigravity 2026</div>', unsafe_allow_html=True)
