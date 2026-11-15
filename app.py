@@ -930,4 +930,4 @@ else:
         st.exception(e)
 
 # Rodapé
-st.markdown('<div class="footer">Desenvolvido com ❤️ e inteligência de dados • Antigravity 2026</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">Desenvolvido com ❤️ e inteligência de dados • Felipe 2026</div>', unsafe_allow_html=True)
